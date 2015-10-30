@@ -53,14 +53,38 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
       missDist <- paste("      ",missName,"[i] ~ dpois(mu_",missName,"[i])", sep="")
       missLinPred <- paste("      ","log(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
     }
-    if (length(missCovNames)>0) {
-      for (i in 1:length(missCovNames)) {
-        missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+    else if (method[targetCol]=="cat") {
+      missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
+      numCats <- max(originaldata[,targetCol], na.rm=TRUE)
+      missLinPred <- paste("      ","pi_",missName,"[i,1] <- 1/denom_",missName,"[i]", sep="")
+      for (catNum in 2:numCats) {
+        missLinPred <- c(missLinPred, paste("      ","pi_",missName,"[i,",catNum,"] <- xb_",missName,"[i,",catNum-1,"]/denom_",missName,"[i]", sep=""))
+      }
+      denomExpr <- paste("      ","denom_",missName,"[i] <- 1", sep="")
+      for (catNum in 2:numCats) {
+        denomExpr <- paste(denomExpr,"+exp(xb_",missName,"[i,",catNum-1,"])", sep="")
+      }
+      missLinPred <- c(missLinPred,denomExpr)
+      for (catNum in 2:numCats) {
+        xbExpr <- paste("      ","xb_",missName,"[i,",catNum-1,"] <- gamma_",missName,"_",catNum-1,"[1]", sep="")
+        if (length(missCovNames)>0) {
+          for (i in 1:length(missCovNames)) {
+            xbExpr <- paste(xbExpr, " + gamma_",missName,"_",catNum-1,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+          }
+        }
+        missLinPred <- c(missLinPred, xbExpr)
+      }
+    }
+    if ((method[targetCol]=="norm") | (method[targetCol]=="logit") | (method[targetCol]=="pois")) {
+      if (length(missCovNames)>0) {
+        for (i in 1:length(missCovNames)) {
+          missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+        }
       }
     }
 
     #append to modelCode
-    modelCode <- c(modelCode,missDist,missLinPred)
+    modelCode <- c(modelCode,missDist,missLinPred,"")
 
     #append to priorCode
     priorCode <- c(priorCode,paste("   gamma_",missName," ~ dmnorm(gamma_",missName,"_mean,gamma_",missName,"_prec)", sep=""))
