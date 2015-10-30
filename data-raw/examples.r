@@ -1,3 +1,6 @@
+library(R2jags)
+library(lattice)
+library(MASS)
 
 myburnin <- 100
 mysample <- 100
@@ -7,7 +10,7 @@ expit <- function(arg) {
 }
 
 #generate data
-n <- 5000
+n <- 1000
 xzcorr <- 0.25
 numCovs <- 4
 SigmaMat <- array(xzcorr, dim=c(numCovs,numCovs))
