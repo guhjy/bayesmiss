@@ -20,16 +20,9 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
     "   for (i in 1:n) {",
     omDist,
     omLinPred)
-  priorCode <- c("beta ~ dmnorm(betamean,betaprec)","outcome_tau ~ dgamma(tau_alpha, tau_beta)")
+  priorCode <- c("   beta ~ dmnorm(betamean,betaprec)","   outcome_tau ~ dgamma(tau_alpha, tau_beta)")
 
   fullObsVars <- which((colSums(r)==n) & (colnames(originaldata) %in% omcovnames))
-  partialVars <- which(method=="norm")
-
-  #add lines, if needed, for passively imputed covariates
-  #passiveVars <- which((method!="") & (method!="norm"))
-  #if (length(passiveVars)>0) {
-  #  modelCode <- c(modelCode, paste("      ",colnames(originaldata)[passiveVars],"[i] <- ",method[passiveVars],sep=""))
-  #}
 
   #start adding to R script file
   rScriptText <- c(paste("jags.data <- as.list(",deparse(substitute(originaldata)),")", sep=""),
@@ -56,17 +49,19 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
       missDist <- paste("      ",missName,"[i] ~ dbern(mu_",missName,"[i])", sep="")
       missLinPred <- paste("      ","logit(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
     }
-    for (i in 1:length(missCovNames)) {
-      missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+    if (length(missCovNames)>0) {
+      for (i in 1:length(missCovNames)) {
+        missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+      }
     }
 
     #append to modelCode
     modelCode <- c(modelCode,missDist,missLinPred)
 
     #append to priorCode
-    priorCode <- c(priorCode,paste("gamma_",missName," ~ dmnorm(gamma_",missName,"_mean,gamma_",missName,"_prec)", sep=""))
+    priorCode <- c(priorCode,paste("   gamma_",missName," ~ dmnorm(gamma_",missName,"_mean,gamma_",missName,"_prec)", sep=""))
     if (method[targetCol]=="norm") {
-      priorCode <- c(priorCode, paste("tau_",missName," ~ dgamma(tau_alpha, tau_beta)", sep=""))
+      priorCode <- c(priorCode, paste("   tau_",missName," ~ dgamma(tau_alpha, tau_beta)", sep=""))
     }
 
     #append priors to JAGS data list
@@ -78,7 +73,7 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
 
 
   #write model to file
-  modFileName <- "bayesMissMod.bug"
+  modFileName <- "bayesmissmod.bug"
   fileConn <- file(modFileName )
   modelCode <- c(modelCode, "   }","")
   priorCode <- c(priorCode, "}")
@@ -88,7 +83,7 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
   print(paste("Your JAGS model has been written to: ", modFileName, sep=""))
 
   #run bayes analysis
-  rScriptFileName <- "bayesMissRScript.r"
+  rScriptFileName <- "bayesmissRScript.r"
   fileConn <- file(rScriptFileName)
   rScriptText <- c(rScriptText, "jags.params <- c(\"beta\", \"outcome_tau\")")
   rScriptText <- c(rScriptText, paste("modelFit <- jags(data=jags.data, parameters.to.save=jags.params, n.iter=",nIter,
