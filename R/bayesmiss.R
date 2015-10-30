@@ -49,6 +49,10 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
       missDist <- paste("      ",missName,"[i] ~ dbern(mu_",missName,"[i])", sep="")
       missLinPred <- paste("      ","logit(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
     }
+    else if (method[targetCol]=="pois") {
+      missDist <- paste("      ",missName,"[i] ~ dpois(mu_",missName,"[i])", sep="")
+      missLinPred <- paste("      ","log(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
+    }
     if (length(missCovNames)>0) {
       for (i in 1:length(missCovNames)) {
         missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
