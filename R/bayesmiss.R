@@ -3,6 +3,8 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
   #create matrix of response indicators
   r <- 1*(is.na(originaldata)==0)
 
+  if (sum(method!="") != max(order)) stop("Number of variables with imputation methods, as specified in method argument, does not concur with value given to order argument.")
+
   #outcome model
   outcomeCol <- which(colnames(originaldata)==as.formula(omformula)[[2]])
   outcomename <- as.character(as.formula(omformula)[[2]])
@@ -56,9 +58,13 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
     else if (method[targetCol]=="cat") {
       missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
       numCats <- max(originaldata[,targetCol], na.rm=TRUE)
-      missLinPred <- paste("      ","pi_",missName,"[i,1] <- 1/denom_",missName,"[i]", sep="")
+
+      missLinPred <- paste("      ","pi_",missName,"[i,1] <- 1", sep="")
       for (catNum in 2:numCats) {
-        missLinPred <- c(missLinPred, paste("      ","pi_",missName,"[i,",catNum,"] <- xb_",missName,"[i,",catNum-1,"]/denom_",missName,"[i]", sep=""))
+        missLinPred <- paste(missLinPred, " - pi_",missName,"[i,",catNum,"]", sep="")
+      }
+      for (catNum in 2:numCats) {
+        missLinPred <- c(missLinPred, paste("      ","pi_",missName,"[i,",catNum,"] <- exp(xb_",missName,"[i,",catNum-1,"])/denom_",missName,"[i]", sep=""))
       }
       denomExpr <- paste("      ","denom_",missName,"[i] <- 1", sep="")
       for (catNum in 2:numCats) {
@@ -84,17 +90,33 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
     }
 
     #append to modelCode
-    modelCode <- c(modelCode,missDist,missLinPred,"")
+    modelCode <- c(modelCode,"",missDist,missLinPred)
 
     #append to priorCode
-    priorCode <- c(priorCode,paste("   gamma_",missName," ~ dmnorm(gamma_",missName,"_mean,gamma_",missName,"_prec)", sep=""))
-    if (method[targetCol]=="norm") {
-      priorCode <- c(priorCode, paste("   tau_",missName," ~ dgamma(tau_alpha, tau_beta)", sep=""))
+    if (method[targetCol]=="cat") {
+      priorCode <- c(priorCode,"")
+      for (catNum in 2:numCats) {
+        priorCode <- c(priorCode,paste("   gamma_",missName,"_",catNum-1," ~ dmnorm(gamma_",missName,"_",catNum-1,"_mean,gamma_",missName,"_",catNum-1,"_prec)", sep=""))
+      }
+    }
+    else {
+      priorCode <- c(priorCode,"",paste("   gamma_",missName," ~ dmnorm(gamma_",missName,"_mean,gamma_",missName,"_prec)", sep=""))
+      if (method[targetCol]=="norm") {
+        priorCode <- c(priorCode, paste("   tau_",missName," ~ dgamma(tau_alpha, tau_beta)", sep=""))
+      }
     }
 
     #append priors to JAGS data list
-    rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
-      paste("jags.data$gamma_",missName,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+    if (method[targetCol]=="cat") {
+      for (catNum in 2:numCats) {
+        rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_",catNum-1,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
+                         paste("jags.data$gamma_",missName,"_",catNum-1,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+      }
+    }
+    else {
+      rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
+        paste("jags.data$gamma_",missName,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+    }
 
     prevMissVars <- c(prevMissVars,targetCol)
   }
