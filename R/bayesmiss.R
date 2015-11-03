@@ -81,6 +81,29 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
         missLinPred <- c(missLinPred, xbExpr)
       }
     }
+    else if (method[targetCol]=="ologit") {
+      missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
+      numCats <- max(originaldata[,targetCol], na.rm=TRUE)
+
+      missLinPred <- paste("      ","xb_",missName,"[i] <- 0", sep="")
+      if (length(missCovNames)>0) {
+        for (i in 1:length(missCovNames)) {
+          missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i,"]*", missCovNames[i], "[i]", sep="")
+        }
+      }
+      piExpr <- paste("      ","pi_",missName,"[i,1] <- 1", sep="")
+      for (catNum in 2:numCats) {
+        piExpr <- paste(piExpr, " - pi_",missName,"[i,",catNum,"]", sep="")
+      }
+      for (catNum in 2:(numCats-1)) {
+        piExpr <- c(piExpr, paste("      ","pi_",missName,"[i,",catNum,"] <- 1/(1+exp(-k_",missName,"_",catNum," + xb_",
+                                  missName,"[i])) - 1/(1+exp(-k_",missName,"_",catNum-1," + xb_",missName,"[i]))", sep=""))
+      }
+      piExpr <- c(piExpr, paste("      ","pi_",missName,"[i,",numCats,"] <- 1 - 1/(1+exp(-k_",missName,"_",numCats-1," + xb_",missName,"[i]))", sep=""))
+      missLinPred <- c(missLinPred, piExpr)
+    }
+
+
     if ((method[targetCol]=="norm") | (method[targetCol]=="logit") | (method[targetCol]=="pois")) {
       if (length(missCovNames)>0) {
         for (i in 1:length(missCovNames)) {
@@ -104,6 +127,14 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
       if (method[targetCol]=="norm") {
         priorCode <- c(priorCode, paste("   tau_",missName," ~ dgamma(tau_alpha, tau_beta)", sep=""))
       }
+      else if (method[targetCol]=="ologit") {
+        #priors for cutpoints in ordinal logistic regression
+        priorCode <- c(priorCode, paste("   k_",missName,"_1 ~ dnorm(k_",missName,"_1_mean, k_",missName,"_1_prec)", sep=""))
+        for (catNum in 2:(numCats-1)) {
+          priorCode <- c(priorCode, paste("   k_",missName,"_",catNum," <- k_",missName,"_1 + kinc_",missName,"_",catNum-1,  sep=""))
+          priorCode <- c(priorCode, paste("   kinc_",missName,"_",catNum-1," ~ dlnorm(kinc_",missName,"_",catNum-1,"_mean, kinc_",missName,"_",catNum-1,"_prec)",sep=""))
+        }
+      }
     }
 
     #append priors to JAGS data list
@@ -111,6 +142,16 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
       for (catNum in 2:numCats) {
         rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_",catNum-1,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
                          paste("jags.data$gamma_",missName,"_",catNum-1,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+      }
+    }
+    else if (method[targetCol]=="ologit") {
+      rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_mean <- rep(0, ",length(missCovNames),")", sep=""),
+                       paste("jags.data$gamma_",missName,"_prec <- 0.0001*diag(",length(missCovNames),")", sep=""))
+      rScriptText <- c(rScriptText, paste("jags.data$k_",missName,"_1_mean <- 0", sep=""))
+      rScriptText <- c(rScriptText, paste("jags.data$k_",missName,"_1_prec <- 0.0001", sep=""))
+      for (catNum in 2:(numCats-1)) {
+        rScriptText <- c(rScriptText, paste("jags.data$kinc_",missName,"_",catNum-1,"_mean <- 0", sep=""))
+        rScriptText <- c(rScriptText, paste("jags.data$kinc_",missName,"_",catNum-1,"_prec <- 0.0001", sep=""))
       }
     }
     else {
