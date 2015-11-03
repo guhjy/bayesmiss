@@ -61,6 +61,6 @@ mydata <- data.frame(y,x1,x2,x3)
 cca <- lm(y~x1+x2+x3, mydata)
 
 
-bayesmiss(mydata, omformula="y~x1+x2+x3",method=c("","norm","logit","cat"),order=c(0,1,2,3),nChains=5)
+bayesmiss(mydata, omformula="y~x1+x2+x3",method=c("","norm","logit","mlogit"),order=c(0,1,2,3),nChains=5)
 
 

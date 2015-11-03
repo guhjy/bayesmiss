@@ -55,7 +55,7 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
       missDist <- paste("      ",missName,"[i] ~ dpois(mu_",missName,"[i])", sep="")
       missLinPred <- paste("      ","log(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
     }
-    else if (method[targetCol]=="cat") {
+    else if (method[targetCol]=="mlogit") {
       missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
       numCats <- max(originaldata[,targetCol], na.rm=TRUE)
 
@@ -93,7 +93,7 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
     modelCode <- c(modelCode,"",missDist,missLinPred)
 
     #append to priorCode
-    if (method[targetCol]=="cat") {
+    if (method[targetCol]=="mlogit") {
       priorCode <- c(priorCode,"")
       for (catNum in 2:numCats) {
         priorCode <- c(priorCode,paste("   gamma_",missName,"_",catNum-1," ~ dmnorm(gamma_",missName,"_",catNum-1,"_mean,gamma_",missName,"_",catNum-1,"_prec)", sep=""))
@@ -107,7 +107,7 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
     }
 
     #append priors to JAGS data list
-    if (method[targetCol]=="cat") {
+    if (method[targetCol]=="mlogit") {
       for (catNum in 2:numCats) {
         rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_",catNum-1,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
                          paste("jags.data$gamma_",missName,"_",catNum-1,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
