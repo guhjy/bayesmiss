@@ -1,4 +1,4 @@
-bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
+bayesmiss <- function(originaldata,smtype,smformula,method,order,nIter=200,nChains=5) {
   n <- dim(originaldata)[1]
   #create matrix of response indicators
   r <- 1*(is.na(originaldata)==0)
@@ -6,10 +6,10 @@ bayesmiss <- function(originaldata,omformula,method,order,nIter=200,nChains=5) {
   if (sum(method!="") != max(order)) stop("Number of variables with imputation methods, as specified in method argument, does not concur with value given to order argument.")
 
   #outcome model
-  outcomeCol <- which(colnames(originaldata)==as.formula(omformula)[[2]])
-  outcomename <- as.character(as.formula(omformula)[[2]])
+  outcomeCol <- which(colnames(originaldata)==as.formula(smformula)[[2]])
+  outcomename <- as.character(as.formula(smformula)[[2]])
   outcomeModDist <- paste("      ",outcomename,"[i] ~ dnorm(mu[i], outcome_tau)",sep="")
-  omcovnames <- attr(terms(as.formula(omformula)), "term.labels")
+  omcovnames <- attr(terms(as.formula(smformula)), "term.labels")
   omDist <- paste("      ",outcomename,"[i] ~ dnorm(mu[i], outcome_tau)",sep="")
   omLinPred <- "      mu[i] <- beta[1]"
   for (i in 1:length(omcovnames)) {

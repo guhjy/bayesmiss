@@ -34,7 +34,7 @@ mydata <- data.frame(y,x1,x2,x3)
 cca <- lm(y~x1+x2+x3, mydata)
 
 
-bayesmiss(mydata, omformula="y~x1+x2+x3",method=c("","norm","logit","pois"),order=c(0,1,2,3),nChains=5)
+bayesmiss(mydata, smformula="y~x1+x2+x3",method=c("","norm","logit","pois"),order=c(0,1,2,3),nChains=5)
 
 
 
@@ -61,7 +61,7 @@ mydata <- data.frame(y,x1,x2,x3)
 cca <- lm(y~x1+x2+x3, mydata)
 
 
-bayesmiss(mydata, omformula="y~x1+x2+x3",method=c("","norm","logit","ologit"),order=c(0,1,2,3),nChains=5)
+bayesmiss(mydata, smformula="y~x1+x2+x3",method=c("","norm","logit","ologit"),order=c(0,1,2,3),nChains=5)
 
 
 #generate data
@@ -89,6 +89,6 @@ mydata <- data.frame(y,x1,x2,x3)
 cca <- lm(y~x1+x2+x3, mydata)
 
 
-bayesmiss(mydata, omformula="y~x1+x2+x3",method=c("","","","ologit"),order=c(0,0,0,1),nChains=5)
+bayesmiss(mydata, smformula="y~x1+x2+x3",method=c("","","","ologit"),order=c(0,0,0,1),nChains=5)
 
 
