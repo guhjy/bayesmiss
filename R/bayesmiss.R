@@ -1,4 +1,60 @@
-bayesmiss <- function(originaldata,smtype,smformula,method,order,nIter=200,nChains=5) {
+#' Bayesian regression with missing covariates
+#'
+#' \code{bayesmiss} generates JAGS model code and an R script to perform
+#' Bayesian regression, allowing for missingness in covariates.
+#'
+#' \code{bayesmiss} faciliates running Bayesian regression models in which there
+#' are missing values in some of the covariates. The function generates two files,
+#' one a JAGS model file, and one a R script file.
+#'
+#' The JAGS model defines the
+#' user's substantive model, and models as required to handle the missing covariates.
+#'
+#' The R script file generated contains commands to generate the required JAGS data
+#' and parameter objects, which are passed when calling \code{jags}.
+#'
+#' The \code{order} argument is used to specify the order in which the joint
+#' distribution of the partially observed covariates is to be modelled. Models
+#' for the partially observed covariates automatically condition on substantive model
+#' covariates which are fully observed.
+#'
+#' The R script file generated contains commands to generate the required JAGS data
+#' and parameter objects, which are passed when calling \code{jags}. Note that
+#' \code{bayesmiss} doesn't actually run this code - the user, having ensured that
+#' the \code{R2jags} package is installed, must run this code to fit the model.
+#' Note that the MCMC options in the call to \code{jags} are just suggested default.
+#' It is up to the user to ensure, via the usual diagnostics for MCMC, that a
+#' sufficient number of iterations have been run to ensure convergence of the chains.
+#'
+#' If it is desired to add interactions or non-linear covariate effects, the easiest
+#' approach is to first run \code{bayesmiss} omitting these terms, and then modify
+#' the JAGS code file and R code specifying the priors as needed.
+#'
+#' @param originaldata the data frame upon which the analysis is to be performed.
+#'
+#' @param smtype a string specifying the substantive model type
+#'
+#' @param smformula an expression for the substantive model type
+#'
+#' @param method a vector of strings specifying the imputation method for each of
+#' the columns in \code{originaldata}. Currently the possible values are "norm"
+#' (normal linear model), "logit" (logistic regression), "mlogit" (multinomial
+#' logistic regression, and "ologit" (ordinal logistic regression". The elements
+#' corresponding to fully observed variables should be the empty string "".
+#'
+#' @param order a vector specifying the order in which the joint model for missing
+#' covariates should be constructed. e.g. c(0,0,1,2) specifies that the first two
+#' variables are fully observed and that the third and fourth are partially observed,
+#' with the covariate model constructed by modelling the marginal distribution of
+#' the third variable and the conditional distribution of the fourth given the third.
+#'
+#' @return \code{bayesmiss} generates two files in the current working directory:
+#' \code{bayesmissmod.bug} is a JAGS model file for the constructed model, and \code{bayesmissRscript.r}
+#' is an R file containing R code for generating the required JAGS parameters and data
+#' objects, and a call to the \code{jags} function of the \code{R2jags} package for
+#' fitting the model.
+#'
+bayesmiss <- function(originaldata,smtype,smformula,method,order) {
   n <- dim(originaldata)[1]
   #create matrix of response indicators
   r <- 1*(is.na(originaldata)==0)
@@ -177,8 +233,8 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order,nIter=200,nChai
   rScriptFileName <- "bayesmissRScript.r"
   fileConn <- file(rScriptFileName)
   rScriptText <- c(rScriptText, "jags.params <- c(\"beta\", \"outcome_tau\")")
-  rScriptText <- c(rScriptText, paste("modelFit <- jags(data=jags.data, parameters.to.save=jags.params, n.iter=",nIter,
-                   ", n.thin=1, model.file=\"",modFileName,"\", n.chains=",nChains,")", sep=""))
+  rScriptText <- c(rScriptText, paste("modelFit <- jags(data=jags.data, parameters.to.save=jags.params, n.iter=",200,
+                   ", n.thin=1, model.file=\"",modFileName,"\", n.chains=",5,")", sep=""))
   rScriptText <- c(rScriptText, "modelFit")
   writeLines(rScriptText, fileConn)
   close(fileConn)

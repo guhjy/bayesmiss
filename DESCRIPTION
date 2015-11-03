@@ -1,6 +1,7 @@
 Package: bayesmiss
 Type: Package
-Title: Creates JAGS models and R code for Bayesian regression models with missing covariates
+Title: Creates JAGS models and R code for Bayesian regression models with
+    missing covariates
 Version: 0.1
 Date: 2015-10-30
 Author: Jonathan Bartlett
@@ -8,4 +9,6 @@ Maintainer: Jonathan Bartlett <jwb133@googlemail.com>
 Description: More about what it does (maybe more than one line)
 License: What license is it under?
 LazyData: TRUE
-Suggests: R2jags
+Suggests:
+    R2jags
+RoxygenNote: 5.0.0
