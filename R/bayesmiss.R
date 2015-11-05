@@ -83,7 +83,8 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
   fullObsVars <- which((colSums(r)==n) & (colnames(originaldata) %in% omcovnames))
 
   #start adding to R script file
-  rScriptText <- c(paste("jags.data <- as.list(",deparse(substitute(originaldata)),")", sep=""),
+  rScriptText <- "library(rjags)"
+  rScriptText <- c(rScriptText,paste("jags.data <- as.list(",deparse(substitute(originaldata)),")", sep=""),
   "jags.data$n <- n",
   paste("jags.data$betamean <- rep(0, ",length(omcovnames)+1,")",sep=""),
   paste("jags.data$betaprec <- 0.0001*diag(",length(omcovnames)+1,")",sep=""),
@@ -233,14 +234,14 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
   rScriptFileName <- "bayesmissRScript.r"
   fileConn <- file(rScriptFileName)
   rScriptText <- c(rScriptText, "jags.params <- c(\"beta\", \"outcome_tau\")")
-  rScriptText <- c(rScriptText, paste("modelFit <- jags(data=jags.data, parameters.to.save=jags.params, n.iter=",200,
-                   ", n.thin=1, model.file=\"",modFileName,"\", n.chains=",5,")", sep=""))
-  rScriptText <- c(rScriptText, "modelFit")
+
+  rScriptText <- c(rScriptText, paste("jagsmodel <- jags.model(data=jags.data, file=\"",modFileName,"\",n.chains=5)", sep=""))
+  rScriptText <- c(rScriptText, "burnin <- coda.samples(jagsmodel, variable.names=c(\"beta\"), n.iter=200)")
+  rScriptText <- c(rScriptText, "mainsample <- coda.samples(jagsmodel, variable.names=c(\"beta\"), n.iter=200)")
+  rScriptText <- c(rScriptText, "summary(mainsample)")
   writeLines(rScriptText, fileConn)
   close(fileConn)
 
   print(paste("Your R script has been written to: ", rScriptFileName, sep=""))
 
-  #run analysis
-  #source(rScriptFileName, local=TRUE)
 }
