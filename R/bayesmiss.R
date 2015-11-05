@@ -83,7 +83,7 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
   fullObsVars <- which((colSums(r)==n) & (colnames(originaldata) %in% omcovnames))
 
   #start adding to R script file
-  rScriptText <- "library(rjags)"
+  rScriptText <- "library(rjags,coda)"
   rScriptText <- c(rScriptText,paste("jags.data <- as.list(",deparse(substitute(originaldata)),")", sep=""),
   "jags.data$n <- n",
   paste("jags.data$betamean <- rep(0, ",length(omcovnames)+1,")",sep=""),
@@ -239,6 +239,7 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
   rScriptText <- c(rScriptText, "burnin <- coda.samples(jagsmodel, variable.names=c(\"beta\"), n.iter=200)")
   rScriptText <- c(rScriptText, "mainsample <- coda.samples(jagsmodel, variable.names=c(\"beta\"), n.iter=200)")
   rScriptText <- c(rScriptText, "summary(mainsample)")
+  rScriptText <- c(rScriptText, "gelman.diag(mainsample)")
   writeLines(rScriptText, fileConn)
   close(fileConn)
 
