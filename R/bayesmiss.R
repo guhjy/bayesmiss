@@ -41,6 +41,8 @@
 #' (normal linear model), "logit" (logistic regression), "mlogit" (multinomial
 #' logistic regression, and "ologit" (ordinal logistic regression". The elements
 #' corresponding to fully observed variables should be the empty string "".
+#' Variables imputed using mlogit or ologit should be stored as factors, coded
+#' 1:K, where K is the number of categories.
 #'
 #' @param order a vector specifying the order in which the joint model for missing
 #' covariates should be constructed. e.g. c(0,0,1,2) specifies that the first two
@@ -114,7 +116,7 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
     }
     else if (method[targetCol]=="mlogit") {
       missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
-      numCats <- max(originaldata[,targetCol], na.rm=TRUE)
+      numCats <- nlevels(originaldata[,targetCol])
 
       missLinPred <- paste("      ","pi_",missName,"[i,1] <- 1", sep="")
       for (catNum in 2:numCats) {
@@ -140,7 +142,7 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
     }
     else if (method[targetCol]=="ologit") {
       missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
-      numCats <- max(originaldata[,targetCol], na.rm=TRUE)
+      numCats <- nlevels(originaldata[,targetCol])
 
       missLinPred <- paste("      ","xb_",missName,"[i] <- 0", sep="")
       if (length(missCovNames)>0) {
@@ -159,6 +161,7 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
       piExpr <- c(piExpr, paste("      ","pi_",missName,"[i,",numCats,"] <- 1 - 1/(1+exp(-k_",missName,"_",numCats-1," + xb_",missName,"[i]))", sep=""))
       missLinPred <- c(missLinPred, piExpr)
     }
+    else stop(paste("Method ",method[targetCol]," not recognised.",sep=""))
 
 
     if ((method[targetCol]=="norm") | (method[targetCol]=="logit") | (method[targetCol]=="pois")) {
