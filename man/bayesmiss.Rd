@@ -4,26 +4,20 @@
 \alias{bayesmiss}
 \title{Bayesian regression with missing covariates}
 \usage{
-bayesmiss(originaldata, smtype, smformula, method, order)
+bayesmiss(originaldata, smoutcome, method, order)
 }
 \arguments{
 \item{originaldata}{the data frame upon which the analysis is to be performed.}
 
-\item{smtype}{a string specifying the substantive model type}
+\item{smoutcome}{the name of the column corresponding to the outcome variable
+of the substantive model.}
 
-\item{smformula}{an expression for the substantive model type}
+\item{method}{a vector of strings specifying the model type to use for each of
+the columns in \code{originaldata}.}
 
-\item{method}{a vector of strings specifying the imputation method for each of
-the columns in \code{originaldata}. Currently the possible values are "norm"
-(normal linear model), "logit" (logistic regression), "mlogit" (multinomial
-logistic regression, and "ologit" (ordinal logistic regression". The elements
-corresponding to fully observed variables should be the empty string "".}
-
-\item{order}{a vector specifying the order in which the joint model for missing
-covariates should be constructed. e.g. c(0,0,1,2) specifies that the first two
-variables are fully observed and that the third and fourth are partially observed,
-with the covariate model constructed by modelling the marginal distribution of
-the third variable and the conditional distribution of the fourth given the third.}
+\item{order}{a vector specifying the order in which the joint model should
+be constructed. e.g. c(0,0,1,2) specifies that the joint model be factorized
+as f(v3|v1,v2)f(v4|v1,v2,v3).}
 }
 \value{
 \code{bayesmiss} generates two files in the current working directory:
@@ -38,23 +32,39 @@ Bayesian regression, allowing for missingness in covariates.
 }
 \details{
 \code{bayesmiss} faciliates running Bayesian regression models in which there
-are missing values in some of the covariates. The function generates two files
+are missing values in some of the covariates. The function generates two files,
+one a JAGS model file, and one a R script file. The JAGS model defines the
+user's substantive model, and models as required to handle the missing covariates,
+and any auxiliary variables if present. The R script file generated contains
+commands to generate the required JAGS data and parameter objects, and code
+required to fit the model. Note that \code{bayesmiss} does not actually run this
+code. Instead, the user is advised to check the model specification and R
+script to ensure it is as desired. The R code can then be run to fit the model.
+
+The method argument specifies what model type to use for each variable.
+Currently the possible values are "norm"
+(normal linear model), "logit" (logistic regression), "mlogit" (multinomial
+logistic regression, "ologit" (ordinal logistic regression", and "pois"
+(Poisson regression). The element corresponding to the outcome of the
+substantive model should be specified as desired according to the desired
+type of substantive model. A model type must be specified for all auxiliary
+variables. Entries corresponding to variables which are covariates in the
+substantive model and which are fully observed should be specified as "".
+Variables modelled using mlogit or ologit should be stored as factors, coded
+1:K, where K is the number of categories.
 
 The \code{order} argument is used to specify the order in which the joint
-distribution of the partially observed covariates is to be modelled. Models
-for the partially observed covariates automatically condition on substantive model
-covariates which are fully observed.
+model is factorized. Elements corresponding to variables which are covariates
+in the substantive model should be specified as 0. Substantive model covariates
+which have missing values should come next. The substantive model outcome variable
+should come next, followed by any auxiliary variables.
 
-The R script file generated contains commands to generate the required JAGS data
-and parameter objects, which are passed when calling \code{jags}. Note that
-\code{bayesmiss} doesn't actually run this code - the user, having ensured that
-the \code{R2jags} package is installed, must run this code to fit the model.
 Note that the MCMC options in the call to \code{jags} are just suggested default.
 It is up to the user to ensure, via the usual diagnostics for MCMC, that a
 sufficient number of iterations have been run to ensure convergence of the chains.
 
-If it is desired to add interactions or non-linear covariate effects, the easiest
-approach is to first run \code{bayesmiss} omitting these terms, and then modify
-the JAGS code file and R code specifying the priors as needed.
+If it is desired to add interactions or non-linear covariate effects, first
+run \code{bayesmiss} omitting these terms, and then modify the JAGS code file
+and R code specifying the priors as needed.
 }
 

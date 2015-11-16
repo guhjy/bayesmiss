@@ -5,50 +5,51 @@
 #'
 #' \code{bayesmiss} faciliates running Bayesian regression models in which there
 #' are missing values in some of the covariates. The function generates two files,
-#' one a JAGS model file, and one a R script file.
+#' one a JAGS model file, and one a R script file. The JAGS model defines the
+#' user's substantive model, and models as required to handle the missing covariates,
+#' and any auxiliary variables if present. The R script file generated contains
+#' commands to generate the required JAGS data and parameter objects, and code
+#' required to fit the model. Note that \code{bayesmiss} does not actually run this
+#' code. Instead, the user is advised to check the model specification and R
+#' script to ensure it is as desired. The R code can then be run to fit the model.
 #'
-#' The JAGS model defines the
-#' user's substantive model, and models as required to handle the missing covariates.
-#'
-#' The R script file generated contains commands to generate the required JAGS data
-#' and parameter objects, which are passed when calling \code{jags}.
+#' The method argument specifies what model type to use for each variable.
+#' Currently the possible values are "norm"
+#' (normal linear model), "logit" (logistic regression), "mlogit" (multinomial
+#' logistic regression, "ologit" (ordinal logistic regression", and "pois"
+#' (Poisson regression). The element corresponding to the outcome of the
+#' substantive model should be specified as desired according to the desired
+#' type of substantive model. A model type must be specified for all auxiliary
+#' variables. Entries corresponding to variables which are covariates in the
+#' substantive model and which are fully observed should be specified as "".
+#' Variables modelled using mlogit or ologit should be stored as factors, coded
+#' 1:K, where K is the number of categories.
 #'
 #' The \code{order} argument is used to specify the order in which the joint
-#' distribution of the partially observed covariates is to be modelled. Models
-#' for the partially observed covariates automatically condition on substantive model
-#' covariates which are fully observed.
+#' model is factorized. Elements corresponding to variables which are covariates
+#' in the substantive model should be specified as 0. Substantive model covariates
+#' which have missing values should come next. The substantive model outcome variable
+#' should come next, followed by any auxiliary variables.
 #'
-#' The R script file generated contains commands to generate the required JAGS data
-#' and parameter objects, which are passed when calling \code{jags}. Note that
-#' \code{bayesmiss} doesn't actually run this code - the user, having ensured that
-#' the \code{R2jags} package is installed, must run this code to fit the model.
 #' Note that the MCMC options in the call to \code{jags} are just suggested default.
 #' It is up to the user to ensure, via the usual diagnostics for MCMC, that a
 #' sufficient number of iterations have been run to ensure convergence of the chains.
 #'
-#' If it is desired to add interactions or non-linear covariate effects, the easiest
-#' approach is to first run \code{bayesmiss} omitting these terms, and then modify
-#' the JAGS code file and R code specifying the priors as needed.
+#' If it is desired to add interactions or non-linear covariate effects, first
+#' run \code{bayesmiss} omitting these terms, and then modify the JAGS code file
+#' and R code specifying the priors as needed.
 #'
 #' @param originaldata the data frame upon which the analysis is to be performed.
 #'
-#' @param smtype a string specifying the substantive model type
+#' @param smoutcome the name of the column corresponding to the outcome variable
+#' of the substantive model.
 #'
-#' @param smformula an expression for the substantive model type
+#' @param method a vector of strings specifying the model type to use for each of
+#' the columns in \code{originaldata}.
 #'
-#' @param method a vector of strings specifying the imputation method for each of
-#' the columns in \code{originaldata}. Currently the possible values are "norm"
-#' (normal linear model), "logit" (logistic regression), "mlogit" (multinomial
-#' logistic regression, and "ologit" (ordinal logistic regression". The elements
-#' corresponding to fully observed variables should be the empty string "".
-#' Variables imputed using mlogit or ologit should be stored as factors, coded
-#' 1:K, where K is the number of categories.
-#'
-#' @param order a vector specifying the order in which the joint model for missing
-#' covariates should be constructed. e.g. c(0,0,1,2) specifies that the first two
-#' variables are fully observed and that the third and fourth are partially observed,
-#' with the covariate model constructed by modelling the marginal distribution of
-#' the third variable and the conditional distribution of the fourth given the third.
+#' @param order a vector specifying the order in which the joint model should
+#' be constructed. e.g. c(0,0,1,2) specifies that the joint model be factorized
+#' as f(v3|v1,v2)f(v4|v1,v2,v3).
 #'
 #' @return \code{bayesmiss} generates two files in the current working directory:
 #' \code{bayesmissmod.bug} is a JAGS model file for the constructed model, and \code{bayesmissRscript.r}
@@ -56,121 +57,97 @@
 #' objects, and a call to the \code{jags} function of the \code{R2jags} package for
 #' fitting the model.
 #'
-bayesmiss <- function(originaldata,smtype,smformula,method,order) {
+bayesmiss <- function(originaldata,smoutcome,method,order) {
   n <- dim(originaldata)[1]
   #create matrix of response indicators
   r <- 1*(is.na(originaldata)==0)
 
-  #outcome model
-  outcomeCol <- which(colnames(originaldata)==as.formula(smformula)[[2]])
-  outcomename <- as.character(as.formula(smformula)[[2]])
+  if (ncol(pardata)!=length(order)) stop("Argument to order must have the same length as the number of columns in the data frame.")
+  if (ncol(pardata)!=length(method)) stop("Argument to method must have the same length as the number of columns in the data frame.")
 
-  omcovnames <- attr(terms(as.formula(smformula)), "term.labels")
-  if (smtype=="lm") {
-    omDist <- paste("      ",outcomename,"[i] ~ dnorm(mu[i], outcome_tau)",sep="")
-    omLinPred <- "      mu[i] <- beta[1]"
-  }
-  else if (smtype=="poisson") {
-    omDist <- paste("      ",outcomename,"[i] ~ dpois(mu[i])",sep="")
-    omLinPred <- "      log(mu[i]) <- beta[1]"
-  }
-  else stop("You must supply a valid value as the smtype argument.")
-  for (i in 1:length(omcovnames)) {
-    omLinPred <- paste(omLinPred, " + beta[",i+1,"]*", omcovnames[i], "[i]", sep="")
-  }
+  smoutcomecol <- which(colnames(originaldata)==smoutcome)
+  if (length(smoutcomecol)==0) stop(paste("No variable found with name: ",smoutcome,sep=""))
 
   #start constructing model code string
   modelCode <- c(
     "model {",
-    "   for (i in 1:n) {",
-    omDist,
-    omLinPred)
-  if (smtype=="lm") {
-    priorCode <- c("   beta ~ dmnorm(betamean,betaprec)","   outcome_tau ~ dgamma(tau_alpha, tau_beta)")
-  }
-  else if (smtype=="poisson") {
-    priorCode <- "   beta ~ dmnorm(betamean,betaprec)"
-  }
+    "   for (i in 1:n) {")
 
-  fullObsVars <- which((colSums(r)==n) & (colnames(originaldata) %in% omcovnames))
-
-  #start adding to R script file
+  #start constructing code for R script file
   rScriptText <- "library(rjags,coda)"
   rScriptText <- c(rScriptText,paste("jags.data <- as.list(",deparse(substitute(originaldata)),")", sep=""),
-  "jags.data$n <- n",
-  paste("jags.data$betamean <- rep(0, ",length(omcovnames)+1,")",sep=""),
-  paste("jags.data$betaprec <- 0.0001*diag(",length(omcovnames)+1,")",sep=""))
-  if (smtype=="lm") {
-    rScriptText <- c(rScriptText,"jags.data$tau_alpha <- 0.5","jags.data$tau_beta <- 0.5")
-  }
+  "jags.data$n <- n")
 
-  #models for partially observed covariates
-  numPartialVars <- max(order)
-  prevMissVars <- vector(mode="integer",0)
+  #models for variables with non-zero order, i.e.
+  #partially observed substantive model covariates, the outcome of the substantive model,
+  #and any auxiliary variables
+  numVars <- max(order)
+  prevVars <- which(order==0)
+  priorCode <- vector(mode="character",0)
 
-  if (numPartialVars>0) {
-    for (var in 1:numPartialVars) {
+  if (numVars>0) {
+    for (var in 1:numVars) {
       targetCol <- which(order==var)
-      missName <- colnames(originaldata)[targetCol]
-      missCovNames <- colnames(originaldata)[c(fullObsVars,prevMissVars)]
+      varName <- colnames(originaldata)[targetCol]
+      missCovNames <- colnames(originaldata)[prevVars]
 
       if (method[targetCol]=="norm") {
-        missDist <- paste("      ",missName,"[i] ~ dnorm(mu_",missName,"[i], tau_",missName,")", sep="")
-        missLinPred <- paste("      ","mu_",missName,"[i] <- gamma_",missName,"[1]", sep="")
+        missDist <- paste("      ",varName,"[i] ~ dnorm(mu_",varName,"[i], tau_",varName,")", sep="")
+        missLinPred <- paste("      ","mu_",varName,"[i] <- beta_",varName,"[1]", sep="")
       }
       else if (method[targetCol]=="logit") {
-        missDist <- paste("      ",missName,"[i] ~ dbern(mu_",missName,"[i])", sep="")
-        missLinPred <- paste("      ","logit(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
+        missDist <- paste("      ",varName,"[i] ~ dbern(mu_",varName,"[i])", sep="")
+        missLinPred <- paste("      ","logit(mu_",varName,"[i]) <- beta_",varName,"[1]", sep="")
       }
       else if (method[targetCol]=="pois") {
-        missDist <- paste("      ",missName,"[i] ~ dpois(mu_",missName,"[i])", sep="")
-        missLinPred <- paste("      ","log(mu_",missName,"[i]) <- gamma_",missName,"[1]", sep="")
+        missDist <- paste("      ",varName,"[i] ~ dpois(mu_",varName,"[i])", sep="")
+        missLinPred <- paste("      ","log(mu_",varName,"[i]) <- beta_",varName,"[1]", sep="")
       }
       else if (method[targetCol]=="mlogit") {
-        missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
+        missDist <- paste("      ",varName,"[i] ~ dcat(pi_",varName,"[i,])", sep="")
         numCats <- nlevels(originaldata[,targetCol])
 
-        missLinPred <- paste("      ","pi_",missName,"[i,1] <- 1", sep="")
+        missLinPred <- paste("      ","pi_",varName,"[i,1] <- 1", sep="")
         for (catNum in 2:numCats) {
-          missLinPred <- paste(missLinPred, " - pi_",missName,"[i,",catNum,"]", sep="")
+          missLinPred <- paste(missLinPred, " - pi_",varName,"[i,",catNum,"]", sep="")
         }
         for (catNum in 2:numCats) {
-          missLinPred <- c(missLinPred, paste("      ","pi_",missName,"[i,",catNum,"] <- exp(xb_",missName,"[i,",catNum-1,"])/denom_",missName,"[i]", sep=""))
+          missLinPred <- c(missLinPred, paste("      ","pi_",varName,"[i,",catNum,"] <- exp(xb_",varName,"[i,",catNum-1,"])/denom_",varName,"[i]", sep=""))
         }
-        denomExpr <- paste("      ","denom_",missName,"[i] <- 1", sep="")
+        denomExpr <- paste("      ","denom_",varName,"[i] <- 1", sep="")
         for (catNum in 2:numCats) {
-          denomExpr <- paste(denomExpr,"+exp(xb_",missName,"[i,",catNum-1,"])", sep="")
+          denomExpr <- paste(denomExpr,"+exp(xb_",varName,"[i,",catNum-1,"])", sep="")
         }
         missLinPred <- c(missLinPred,denomExpr)
         for (catNum in 2:numCats) {
-          xbExpr <- paste("      ","xb_",missName,"[i,",catNum-1,"] <- gamma_",missName,"_",catNum-1,"[1]", sep="")
+          xbExpr <- paste("      ","xb_",varName,"[i,",catNum-1,"] <- beta_",varName,"_",catNum-1,"[1]", sep="")
           if (length(missCovNames)>0) {
             for (i in 1:length(missCovNames)) {
-              xbExpr <- paste(xbExpr, " + gamma_",missName,"_",catNum-1,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+              xbExpr <- paste(xbExpr, " + beta_",varName,"_",catNum-1,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
             }
           }
           missLinPred <- c(missLinPred, xbExpr)
         }
       }
       else if (method[targetCol]=="ologit") {
-        missDist <- paste("      ",missName,"[i] ~ dcat(pi_",missName,"[i,])", sep="")
+        missDist <- paste("      ",varName,"[i] ~ dcat(pi_",varName,"[i,])", sep="")
         numCats <- nlevels(originaldata[,targetCol])
 
-        missLinPred <- paste("      ","xb_",missName,"[i] <- 0", sep="")
+        missLinPred <- paste("      ","xb_",varName,"[i] <- 0", sep="")
         if (length(missCovNames)>0) {
           for (i in 1:length(missCovNames)) {
-            missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i,"]*", missCovNames[i], "[i]", sep="")
+            missLinPred <- paste(missLinPred, " + beta_",varName,"[",i,"]*", missCovNames[i], "[i]", sep="")
           }
         }
-        piExpr <- paste("      ","pi_",missName,"[i,1] <- 1", sep="")
+        piExpr <- paste("      ","pi_",varName,"[i,1] <- 1", sep="")
         for (catNum in 2:numCats) {
-          piExpr <- paste(piExpr, " - pi_",missName,"[i,",catNum,"]", sep="")
+          piExpr <- paste(piExpr, " - pi_",varName,"[i,",catNum,"]", sep="")
         }
         for (catNum in 2:(numCats-1)) {
-          piExpr <- c(piExpr, paste("      ","pi_",missName,"[i,",catNum,"] <- 1/(1+exp(-k_",missName,"_",catNum," + xb_",
-                                    missName,"[i])) - 1/(1+exp(-k_",missName,"_",catNum-1," + xb_",missName,"[i]))", sep=""))
+          piExpr <- c(piExpr, paste("      ","pi_",varName,"[i,",catNum,"] <- 1/(1+exp(-k_",varName,"_",catNum," + xb_",
+                                    varName,"[i])) - 1/(1+exp(-k_",varName,"_",catNum-1," + xb_",varName,"[i]))", sep=""))
         }
-        piExpr <- c(piExpr, paste("      ","pi_",missName,"[i,",numCats,"] <- 1 - 1/(1+exp(-k_",missName,"_",numCats-1," + xb_",missName,"[i]))", sep=""))
+        piExpr <- c(piExpr, paste("      ","pi_",varName,"[i,",numCats,"] <- 1 - 1/(1+exp(-k_",varName,"_",numCats-1," + xb_",varName,"[i]))", sep=""))
         missLinPred <- c(missLinPred, piExpr)
       }
       else stop(paste("Method ",method[targetCol]," not recognised.",sep=""))
@@ -179,7 +156,7 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
       if ((method[targetCol]=="norm") | (method[targetCol]=="logit") | (method[targetCol]=="pois")) {
         if (length(missCovNames)>0) {
           for (i in 1:length(missCovNames)) {
-            missLinPred <- paste(missLinPred, " + gamma_",missName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
+            missLinPred <- paste(missLinPred, " + beta_",varName,"[",i+1,"]*", missCovNames[i], "[i]", sep="")
           }
         }
       }
@@ -191,20 +168,20 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
       if (method[targetCol]=="mlogit") {
         priorCode <- c(priorCode,"")
         for (catNum in 2:numCats) {
-          priorCode <- c(priorCode,paste("   gamma_",missName,"_",catNum-1," ~ dmnorm(gamma_",missName,"_",catNum-1,"_mean,gamma_",missName,"_",catNum-1,"_prec)", sep=""))
+          priorCode <- c(priorCode,paste("   beta_",varName,"_",catNum-1," ~ dmnorm(beta_",varName,"_",catNum-1,"_mean,beta_",varName,"_",catNum-1,"_prec)", sep=""))
         }
       }
       else {
-        priorCode <- c(priorCode,"",paste("   gamma_",missName," ~ dmnorm(gamma_",missName,"_mean,gamma_",missName,"_prec)", sep=""))
+        priorCode <- c(priorCode,"",paste("   beta_",varName," ~ dmnorm(beta_",varName,"_mean,beta_",varName,"_prec)", sep=""))
         if (method[targetCol]=="norm") {
-          priorCode <- c(priorCode, paste("   tau_",missName," ~ dgamma(tau_alpha, tau_beta)", sep=""))
+          priorCode <- c(priorCode, paste("   tau_",varName," ~ dbeta(tau_",varName,"_alpha, tau_",varName,"_beta)", sep=""))
         }
         else if (method[targetCol]=="ologit") {
           #priors for cutpoints in ordinal logistic regression
-          priorCode <- c(priorCode, paste("   k_",missName,"_1 ~ dnorm(k_",missName,"_1_mean, k_",missName,"_1_prec)", sep=""))
+          priorCode <- c(priorCode, paste("   k_",varName,"_1 ~ dnorm(k_",varName,"_1_mean, k_",varName,"_1_prec)", sep=""))
           for (catNum in 2:(numCats-1)) {
-            priorCode <- c(priorCode, paste("   k_",missName,"_",catNum," <- k_",missName,"_1 + kinc_",missName,"_",catNum-1,  sep=""))
-            priorCode <- c(priorCode, paste("   kinc_",missName,"_",catNum-1," ~ dlnorm(kinc_",missName,"_",catNum-1,"_mean, kinc_",missName,"_",catNum-1,"_prec)",sep=""))
+            priorCode <- c(priorCode, paste("   k_",varName,"_",catNum," <- k_",varName,"_1 + kinc_",varName,"_",catNum-1,  sep=""))
+            priorCode <- c(priorCode, paste("   kinc_",varName,"_",catNum-1," ~ dlnorm(kinc_",varName,"_",catNum-1,"_mean, kinc_",varName,"_",catNum-1,"_prec)",sep=""))
           }
         }
       }
@@ -212,26 +189,61 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
       #append priors to JAGS data list
       if (method[targetCol]=="mlogit") {
         for (catNum in 2:numCats) {
-          rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_",catNum-1,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
-                           paste("jags.data$gamma_",missName,"_",catNum-1,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+          rScriptText <- c(rScriptText, paste("jags.data$beta_",varName,"_",catNum-1,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
+                           paste("jags.data$beta_",varName,"_",catNum-1,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
         }
       }
       else if (method[targetCol]=="ologit") {
-        rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_mean <- rep(0, ",length(missCovNames),")", sep=""),
-                         paste("jags.data$gamma_",missName,"_prec <- 0.0001*diag(",length(missCovNames),")", sep=""))
-        rScriptText <- c(rScriptText, paste("jags.data$k_",missName,"_1_mean <- 0", sep=""))
-        rScriptText <- c(rScriptText, paste("jags.data$k_",missName,"_1_prec <- 0.0001", sep=""))
+        rScriptText <- c(rScriptText, paste("jags.data$beta_",varName,"_mean <- rep(0, ",length(missCovNames),")", sep=""),
+                         paste("jags.data$beta_",varName,"_prec <- 0.0001*diag(",length(missCovNames),")", sep=""))
+        rScriptText <- c(rScriptText, paste("jags.data$k_",varName,"_1_mean <- 0", sep=""))
+        rScriptText <- c(rScriptText, paste("jags.data$k_",varName,"_1_prec <- 0.0001", sep=""))
         for (catNum in 2:(numCats-1)) {
-          rScriptText <- c(rScriptText, paste("jags.data$kinc_",missName,"_",catNum-1,"_mean <- 0", sep=""))
-          rScriptText <- c(rScriptText, paste("jags.data$kinc_",missName,"_",catNum-1,"_prec <- 0.0001", sep=""))
+          rScriptText <- c(rScriptText, paste("jags.data$kinc_",varName,"_",catNum-1,"_mean <- 0", sep=""))
+          rScriptText <- c(rScriptText, paste("jags.data$kinc_",varName,"_",catNum-1,"_prec <- 0.0001", sep=""))
         }
       }
       else {
-        rScriptText <- c(rScriptText, paste("jags.data$gamma_",missName,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
-          paste("jags.data$gamma_",missName,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+        rScriptText <- c(rScriptText, paste("jags.data$beta_",varName,"_mean <- rep(0, ",length(missCovNames)+1,")", sep=""),
+          paste("jags.data$beta_",varName,"_prec <- 0.0001*diag(",length(missCovNames)+1,")", sep=""))
+      }
+      if (method[targetCol]=="norm") {
+        rScriptText <- c(rScriptText, paste("jags.data$tau_",varName,"_alpha <- 0.5",sep=""),
+                         paste("jags.data$tau_",varName,"_beta <- 0.5", sep=""))
       }
 
-      prevMissVars <- c(prevMissVars,targetCol)
+      #if this is the outcome variable in the substantive model, add the model parameters to jags.params to monitor
+      if (targetCol==smoutcomecol) {
+        jagsparamline <- "jags.params <- c("
+
+        if (method[targetCol]=="mlogit") {
+          jagsparamline <- paste(jagsparamline, "\"beta_",varName,"_1\"", sep="")
+          if (numCats>2) {
+            for (catNum in 3:numCats) {
+              jagsparamline <- paste(jagsparamline, ",\"beta_",varName,"_",catNum-1,"\"", sep="")
+            }
+          }
+          jagsparamline <- paste(jagsparamline, ")", sep="")
+        }
+        else if (method[targetCol]=="ologit") {
+          jagsparamline <- paste(jagsparamline, "\"beta_",varName,"\"", sep="")
+          jagsparamline <- paste(jagsparamline, ",\"k_",varName,"_1\"", sep="")
+          for (catNum in 2:(numCats-1)) {
+            jagsparamline <- paste(jagsparamline, ",\"kinc_",varName,"_",catNum-1,"\"", sep="")
+          }
+          jagsparamline <- paste(jagsparamline, ")", sep="")
+        }
+        else if (method[targetCol]=="norm") {
+          jagsparamline <- paste(jagsparamline, "\"beta_",varName,"\",\"tau_",varName,"\")", sep="")
+        }
+        else {
+          jagsparamline <- paste(jagsparamline, "\"beta_",varName,"\")", sep="")
+        }
+        rScriptText <- c(rScriptText, jagsparamline)
+      }
+
+
+      prevVars <- c(prevVars,targetCol)
     }
   }
 
@@ -248,11 +260,10 @@ bayesmiss <- function(originaldata,smtype,smformula,method,order) {
   #run bayes analysis
   rScriptFileName <- "bayesmissRScript.r"
   fileConn <- file(rScriptFileName)
-  rScriptText <- c(rScriptText, "jags.params <- c(\"beta\", \"outcome_tau\")")
 
   rScriptText <- c(rScriptText, paste("jagsmodel <- jags.model(data=jags.data, file=\"",modFileName,"\",n.chains=5)", sep=""))
-  rScriptText <- c(rScriptText, "burnin <- coda.samples(jagsmodel, variable.names=c(\"beta\"), n.iter=200)")
-  rScriptText <- c(rScriptText, "mainsample <- coda.samples(jagsmodel, variable.names=c(\"beta\"), n.iter=200)")
+  rScriptText <- c(rScriptText, "burnin <- coda.samples(jagsmodel, variable.names=jags.params, n.iter=200)")
+  rScriptText <- c(rScriptText, "mainsample <- coda.samples(jagsmodel, variable.names=jags.params, n.iter=200)")
   rScriptText <- c(rScriptText, "summary(mainsample)")
   rScriptText <- c(rScriptText, "gelman.diag(mainsample)")
   writeLines(rScriptText, fileConn)
