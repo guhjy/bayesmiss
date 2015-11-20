@@ -14,16 +14,21 @@
 #' script to ensure it is as desired. The R code can then be run to fit the model.
 #'
 #' The method argument specifies what model type to use for each variable.
-#' Currently the possible values are "norm"
-#' (normal linear model), "logit" (logistic regression), "mlogit" (multinomial
-#' logistic regression, "ologit" (ordinal logistic regression", and "pois"
-#' (Poisson regression). The element corresponding to the outcome of the
+#' Currently the possible values are:
+#' \itemize{
+#'  \item \code{"norm"} (normal linear model)
+#'  \item \code{"logit"} (logistic regression)
+#'  \item \code{"mlogit"} (multinomial logistic regression)
+#'  \item \code{"ologit"} (ordinal logistic regression)
+#'  \item \code{"pois"} (Poisson regression)
+#' }
+#' The element corresponding to the outcome of the
 #' substantive model should be specified as desired according to the desired
 #' type of substantive model. A model type must be specified for all auxiliary
 #' variables. Entries corresponding to variables which are covariates in the
 #' substantive model and which are fully observed should be specified as "".
-#' Variables modelled using mlogit or ologit should be stored as factors, coded
-#' 1:K, where K is the number of categories.
+#' Variables modelled using mlogit or ologit should be stored as numeric
+#' (not factors), and coded 1:K, where K is the number of categories.
 #'
 #' The \code{order} argument is used to specify the order in which the joint
 #' model is factorized. Elements corresponding to variables which are covariates
@@ -65,8 +70,8 @@ bayesmiss <- function(originaldata,smoutcome,method,order) {
   #create matrix of response indicators
   r <- 1*(is.na(originaldata)==0)
 
-  if (ncol(pardata)!=length(order)) stop("Argument to order must have the same length as the number of columns in the data frame.")
-  if (ncol(pardata)!=length(method)) stop("Argument to method must have the same length as the number of columns in the data frame.")
+  if (ncol(originaldata)!=length(order)) stop("Argument to order must have the same length as the number of columns in the data frame.")
+  if (ncol(originaldata)!=length(method)) stop("Argument to method must have the same length as the number of columns in the data frame.")
 
   smoutcomecol <- which(colnames(originaldata)==smoutcome)
   if (length(smoutcomecol)==0) stop(paste("No variable found with name: ",smoutcome,sep=""))
@@ -108,7 +113,7 @@ bayesmiss <- function(originaldata,smoutcome,method,order) {
       }
       else if (method[targetCol]=="mlogit") {
         missDist <- paste("      ",varName,"[i] ~ dcat(pi_",varName,"[i,])", sep="")
-        numCats <- nlevels(originaldata[,targetCol])
+        numCats <- max(originaldata[,targetCol],na.rm=TRUE)
 
         missLinPred <- paste("      ","pi_",varName,"[i,1] <- 1", sep="")
         for (catNum in 2:numCats) {
@@ -134,7 +139,7 @@ bayesmiss <- function(originaldata,smoutcome,method,order) {
       }
       else if (method[targetCol]=="ologit") {
         missDist <- paste("      ",varName,"[i] ~ dcat(pi_",varName,"[i,])", sep="")
-        numCats <- nlevels(originaldata[,targetCol])
+        numCats <- max(originaldata[,targetCol],na.rm=TRUE)
 
         missLinPred <- paste("      ","xb_",varName,"[i] <- 0", sep="")
         if (length(missCovNames)>0) {
