@@ -178,7 +178,7 @@ bayesmiss <- function(originaldata,smoutcome,method,order) {
       else {
         priorCode <- c(priorCode,"",paste("   beta_",varName," ~ dmnorm(beta_",varName,"_mean,beta_",varName,"_prec)", sep=""))
         if (method[targetCol]=="norm") {
-          priorCode <- c(priorCode, paste("   tau_",varName," ~ dbeta(tau_",varName,"_alpha, tau_",varName,"_beta)", sep=""))
+          priorCode <- c(priorCode, paste("   tau_",varName," ~ dgamma(tau_",varName,"_alpha, tau_",varName,"_beta)", sep=""))
         }
         else if (method[targetCol]=="ologit") {
           #priors for cutpoints in ordinal logistic regression
