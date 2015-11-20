@@ -50,7 +50,7 @@ x3 <- ceiling(3*runif(n))
 
 resvar <- 10
 
-y <- x1+x2+x3+rnorm(n,sd=resvar^0.5)
+y <- x1+x2+rnorm(n,sd=resvar^0.5)
 
 x1misspr <- expit(y-5)
 x1[(runif(n)<x1misspr)] <- NA
@@ -61,7 +61,27 @@ mydata <- data.frame(y,x1,x2,x3)
 cca <- lm(y~x1+x2+x3, mydata)
 
 
-bayesmiss(mydata, smformula="y~x1+x2+x3",method=c("","norm","logit","ologit"),order=c(0,1,2,3),nChains=5)
+bayesmiss(mydata, smoutcome="y",method=c("norm","norm","logit","ologit"),order=c(4,1,2,3))
+
+library(rjags,coda)
+jags.data <- as.list(mydata)
+jags.data$n <- n
+jags.data$beta_x1_mean <- rep(0, 1)
+jags.data$beta_x1_prec <- 0.0001*diag(1)
+jags.data$tau_x1_alpha <- 0.5
+jags.data$tau_x1_beta <- 0.5
+jags.data$beta_x2_mean <- rep(0, 2)
+jags.data$beta_x2_prec <- 0.0001*diag(2)
+jags.data$beta_y_mean <- rep(0, 3)
+jags.data$beta_y_prec <- 0.0001*diag(3)
+jags.data$tau_y_alpha <- 0.5
+jags.data$tau_y_beta <- 0.5
+jags.params <- c("beta_y","tau_y")
+jagsmodel <- jags.model(data=jags.data, file="bayesmissmod.bug",n.chains=5)
+burnin <- coda.samples(jagsmodel, variable.names=jags.params, n.iter=200)
+mainsample <- coda.samples(jagsmodel, variable.names=jags.params, n.iter=200)
+summary(mainsample)
+gelman.diag(mainsample)
 
 
 #generate data
