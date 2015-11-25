@@ -113,24 +113,24 @@ bayesmiss <- function(originaldata,smoutcome,method,order,factorcov=TRUE) {
           linPred <- paste("      ","log(mu_",varName,"[i]) <- beta_",varName,"[1]", sep="")
         }
         parNum <- 1
-        if ((method[targetCol]=="norm") | (method[targetCol]=="logit") | (method[targetCol]=="pois")) {
-          if (length(covNames)>0) {
-            for (i in 1:length(covNames)) {
-              covColNum <- which(colnames(originaldata)==covNames[i])
-              if ((method[covColNum]=="ologit") | (method[covColNum]=="mlogit")) {
-                #include this covariate as factor variable here
-                for (levelNum in 2:max(originaldata[,covColNum],na.rm=TRUE)) {
-                  parNum <- parNum + 1
-                  linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*equals(", covNames[i], "[i],",levelNum,")", sep="")
-                }
-              }
-              else {
+
+        if (length(covNames)>0) {
+          for (i in 1:length(covNames)) {
+            covColNum <- which(colnames(originaldata)==covNames[i])
+            if ((method[covColNum]=="ologit") | (method[covColNum]=="mlogit")) {
+              #include this covariate as factor variable here
+              for (levelNum in 2:max(originaldata[,covColNum],na.rm=TRUE)) {
                 parNum <- parNum + 1
-                linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*", covNames[i], "[i]", sep="")
+                linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*equals(", covNames[i], "[i],",levelNum,")", sep="")
               }
+            }
+            else {
+              parNum <- parNum + 1
+              linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*", covNames[i], "[i]", sep="")
             }
           }
         }
+
       }
       else if (method[targetCol]=="mlogit") {
         varDist <- paste("      ",varName,"[i] ~ dcat(pi_",varName,"[i,])", sep="")
@@ -151,18 +151,20 @@ bayesmiss <- function(originaldata,smoutcome,method,order,factorcov=TRUE) {
         for (catNum in 2:numCats) {
           xbExpr <- paste("      ","xb_",varName,"[i,",catNum-1,"] <- beta_",varName,"_",catNum-1,"[1]", sep="")
           parNum <- 1
-          for (i in 1:length(covNames)) {
-            covColNum <- which(colnames(originaldata)==covNames[i])
-            if ((method[covColNum]=="ologit") | (method[covColNum]=="mlogit")) {
-              #include this covariate as factor variable here
-              for (levelNum in 2:max(originaldata[,covColNum],na.rm=TRUE)) {
-                parNum <- parNum + 1
-                xbExpr <- paste(xbExpr, " + beta_",varName,"[",parNum,"]*equals(", covNames[i], "[i],",levelNum,")", sep="")
+          if (length(covNames)>0) {
+            for (i in 1:length(covNames)) {
+              covColNum <- which(colnames(originaldata)==covNames[i])
+              if ((method[covColNum]=="ologit") | (method[covColNum]=="mlogit")) {
+                #include this covariate as factor variable here
+                for (levelNum in 2:max(originaldata[,covColNum],na.rm=TRUE)) {
+                  parNum <- parNum + 1
+                  xbExpr <- paste(xbExpr, " + beta_",varName,"[",parNum,"]*equals(", covNames[i], "[i],",levelNum,")", sep="")
+                }
               }
-            }
-            else {
-              parNum <- parNum + 1
-              xbExpr <- paste(xbExpr, " + beta_",varName,"[",parNum,"]*", covNames[i], "[i]", sep="")
+              else {
+                parNum <- parNum + 1
+                xbExpr <- paste(xbExpr, " + beta_",varName,"[",parNum,"]*", covNames[i], "[i]", sep="")
+              }
             }
           }
           linPred <- c(linPred, xbExpr)
@@ -175,18 +177,20 @@ bayesmiss <- function(originaldata,smoutcome,method,order,factorcov=TRUE) {
         linPred <- paste("      ","xb_",varName,"[i] <- 0", sep="")
 
         parNum <- 0
-        for (i in 1:length(covNames)) {
-          covColNum <- which(colnames(originaldata)==covNames[i])
-          if ((method[covColNum]=="ologit") | (method[covColNum]=="mlogit")) {
-            #include this covariate as factor variable here
-            for (levelNum in 2:max(originaldata[,covColNum],na.rm=TRUE)) {
-              parNum <- parNum + 1
-              linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*equals(", covNames[i], "[i],",levelNum,")", sep="")
+        if (length(covNames)>0) {
+          for (i in 1:length(covNames)) {
+            covColNum <- which(colnames(originaldata)==covNames[i])
+            if ((method[covColNum]=="ologit") | (method[covColNum]=="mlogit")) {
+              #include this covariate as factor variable here
+              for (levelNum in 2:max(originaldata[,covColNum],na.rm=TRUE)) {
+                parNum <- parNum + 1
+                linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*equals(", covNames[i], "[i],",levelNum,")", sep="")
+              }
             }
-          }
-          else {
-            parNum <- parNum + 1
-            linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*", covNames[i], "[i]", sep="")
+            else {
+              parNum <- parNum + 1
+              linPred <- paste(linPred, " + beta_",varName,"[",parNum,"]*", covNames[i], "[i]", sep="")
+            }
           }
         }
         piExpr <- paste("      ","pi_",varName,"[i,1] <- 1", sep="")
@@ -213,18 +217,21 @@ bayesmiss <- function(originaldata,smoutcome,method,order,factorcov=TRUE) {
           priorCode <- c(priorCode,paste("   beta_",varName,"_",catNum-1," ~ dmnorm(beta_",varName,"_",catNum-1,"_mean,beta_",varName,"_",catNum-1,"_prec)", sep=""))
         }
       }
+      else if (method[targetCol]=="ologit") {
+        if (length(covNames)>0) {
+          priorCode <- c(priorCode,"",paste("   beta_",varName," ~ dmnorm(beta_",varName,"_mean,beta_",varName,"_prec)", sep=""))
+        }
+        #priors for cutpoints in ordinal logistic regression
+        priorCode <- c(priorCode, paste("   k_",varName,"_1 ~ dnorm(k_",varName,"_1_mean, k_",varName,"_1_prec)", sep=""))
+        for (catNum in 2:(numCats-1)) {
+          priorCode <- c(priorCode, paste("   k_",varName,"_",catNum," <- k_",varName,"_1 + kinc_",varName,"_",catNum-1,  sep=""))
+          priorCode <- c(priorCode, paste("   kinc_",varName,"_",catNum-1," ~ dlnorm(kinc_",varName,"_",catNum-1,"_mean, kinc_",varName,"_",catNum-1,"_prec)",sep=""))
+        }
+      }
       else {
         priorCode <- c(priorCode,"",paste("   beta_",varName," ~ dmnorm(beta_",varName,"_mean,beta_",varName,"_prec)", sep=""))
         if (method[targetCol]=="norm") {
           priorCode <- c(priorCode, paste("   tau_",varName," ~ dgamma(tau_",varName,"_alpha, tau_",varName,"_beta)", sep=""))
-        }
-        else if (method[targetCol]=="ologit") {
-          #priors for cutpoints in ordinal logistic regression
-          priorCode <- c(priorCode, paste("   k_",varName,"_1 ~ dnorm(k_",varName,"_1_mean, k_",varName,"_1_prec)", sep=""))
-          for (catNum in 2:(numCats-1)) {
-            priorCode <- c(priorCode, paste("   k_",varName,"_",catNum," <- k_",varName,"_1 + kinc_",varName,"_",catNum-1,  sep=""))
-            priorCode <- c(priorCode, paste("   kinc_",varName,"_",catNum-1," ~ dlnorm(kinc_",varName,"_",catNum-1,"_mean, kinc_",varName,"_",catNum-1,"_prec)",sep=""))
-          }
         }
       }
 
@@ -236,8 +243,10 @@ bayesmiss <- function(originaldata,smoutcome,method,order,factorcov=TRUE) {
         }
       }
       else if (method[targetCol]=="ologit") {
-        rScriptText <- c(rScriptText, paste("jags.data$beta_",varName,"_mean <- rep(0, ",parNum,")", sep=""),
-                         paste("jags.data$beta_",varName,"_prec <- 0.0001*diag(",parNum,")", sep=""))
+        if (length(covNames)>0) {
+          rScriptText <- c(rScriptText, paste("jags.data$beta_",varName,"_mean <- rep(0, ",parNum,")", sep=""),
+                           paste("jags.data$beta_",varName,"_prec <- 0.0001*diag(",parNum,")", sep=""))
+        }
         rScriptText <- c(rScriptText, paste("jags.data$k_",varName,"_1_mean <- 0", sep=""))
         rScriptText <- c(rScriptText, paste("jags.data$k_",varName,"_1_prec <- 0.0001", sep=""))
         for (catNum in 2:(numCats-1)) {
