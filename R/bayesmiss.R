@@ -65,6 +65,7 @@
 #' objects, and a call to the \code{jags} function of the \code{R2jags} package for
 #' fitting the model.
 #'
+#' @export
 bayesmiss <- function(originaldata,smoutcome,method,order,factorcov=TRUE) {
   n <- dim(originaldata)[1]
   #create matrix of response indicators
