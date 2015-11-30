@@ -4,7 +4,7 @@
 \alias{bayesmiss}
 \title{Bayesian regression with missing covariates}
 \usage{
-bayesmiss(originaldata, smoutcome, method, order)
+bayesmiss(originaldata, smoutcome, method, order, factorcov = TRUE)
 }
 \arguments{
 \item{originaldata}{the data frame upon which the analysis is to be performed.}
